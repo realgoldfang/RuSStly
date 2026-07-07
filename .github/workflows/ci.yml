@@ -2,12 +2,14 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
   pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   check:
-    name: ${{ matrix.name }}
+    name: check-${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -21,7 +23,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install Linux dependencies
@@ -30,3 +31,142 @@ jobs:
 
       - name: Check
         run: cargo check
+
+  package:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [check]
+    name: package-${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: macos-latest
+            name: macos
+          - os: windows-latest
+            name: windows
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev file rpm rpm-build
+
+      - run: cargo build --release
+
+      # --- Linux packages ---
+      - name: Build .deb
+        if: matrix.name == 'linux'
+        run: |
+          cargo install cargo-deb
+          cargo deb
+          mkdir -p artifacts
+          cp target/debian/*.deb artifacts/
+
+      - name: Build .rpm
+        if: matrix.name == 'linux'
+        run: |
+          cargo install cargo-generate-rpm
+          cargo generate-rpm
+          cp target/generate-rpm/*.rpm artifacts/
+
+      - name: Build AppImage
+        if: matrix.name == 'linux'
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+          export APPIMAGE_EXTRACT_AND_RUN=1
+
+          mkdir -p AppDir/usr/bin
+          cp target/release/russtly AppDir/usr/bin/
+          mkdir -p AppDir/usr/share/applications
+          printf '%s\n' '[Desktop Entry]' 'Name=RuSStly' 'Exec=russtly' \
+            'Icon=russtly' 'Type=Application' 'Categories=Audio;Podcast;' \
+            > AppDir/usr/share/applications/russtly.desktop
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          echo 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' | \
+            base64 -d > AppDir/usr/share/icons/hicolor/256x256/apps/russtly.png
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          mv RuSStly*-x86_64.AppImage artifacts/russtly-$VERSION-x86_64.AppImage
+
+      # --- macOS package ---
+      - name: Build .dmg
+        if: matrix.name == 'macos'
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p "RuSStly.app/Contents/MacOS"
+          cp target/release/russtly "RuSStly.app/Contents/MacOS/"
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="UTF-8"?>' \
+            '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+            '<plist version="1.0">' \
+            '<dict>' \
+            '  <key>CFBundleName</key><string>RuSStly</string>' \
+            '  <key>CFBundleDisplayName</key><string>RuSStly</string>' \
+            '  <key>CFBundleExecutable</key><string>russtly</string>' \
+            '  <key>CFBundleIdentifier</key><string>com.github.russtly</string>' \
+            "  <key>CFBundleVersion</key><string>${VERSION}</string>" \
+            "  <key>CFBundleShortVersionString</key><string>${VERSION}</string>" \
+            '  <key>CFBundlePackageType</key><string>APPL</string>' \
+            '  <key>LSMinimumSystemVersion</key><string>10.15</string>' \
+            '</dict>' \
+            '</plist>' \
+            > "RuSStly.app/Contents/Info.plist"
+          mkdir artifacts
+          hdiutil create -volname "RuSStly $VERSION" -srcFolder RuSStly.app \
+            -ov -format UDZO "artifacts/russtly-$VERSION-x86_64.dmg"
+
+      # --- Windows packages ---
+      - name: Package .exe
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts
+          $ver = "$env:GITHUB_REF_NAME".Substring(1)
+          Compress-Archive -Path target/release/russtly.exe,README.md `
+            -DestinationPath "artifacts/russtly-${ver}-x86_64.zip"
+
+      - name: Build .msi
+        if: matrix.name == 'windows'
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          cargo install cargo-wix
+          cargo wix
+
+      - name: Collect MSI
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          if (Test-Path target/wix/*.msi) {
+            Copy-Item target/wix/*.msi artifacts/
+          }
+
+      # --- Upload artifacts for release ---
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-packages
+          path: artifacts/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - run: |
+          mkdir -p release-assets
+          cp -r *-packages/* release-assets/
+          ls -la release-assets/
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true

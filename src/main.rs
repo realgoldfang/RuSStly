@@ -2,6 +2,7 @@ mod app;
 mod db;
 mod download;
 mod feed;
+mod icon;
 mod opml;
 mod playback;
 mod sync;
@@ -30,6 +31,7 @@ fn main() -> eframe::Result<()> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
+            .with_icon(icon::app_icon())
             .with_inner_size(egui::vec2(1100.0, 750.0))
             .with_title("RuSStly — Podcast Client"),
         ..Default::default()

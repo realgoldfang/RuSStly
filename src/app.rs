@@ -327,7 +327,6 @@ impl RuSStlyApp {
     }
 
     fn init_tray(&mut self) {
-        // tray-icon uses libappindicator (X11 only; Wayland needs StatusNotifier)
         if std::env::var("XDG_SESSION_TYPE").as_deref() == Ok("wayland") || gtk::init().is_err() {
             return;
         }
@@ -336,6 +335,7 @@ impl RuSStlyApp {
         if let Some(menu) = Menu::with_items(&[&show, &quit]).ok() {
             self._tray = TrayIconBuilder::new()
                 .with_menu(Box::new(menu))
+                .with_icon(crate::icon::tray_icon())
                 .with_tooltip("RuSStly")
                 .build()
                 .ok();

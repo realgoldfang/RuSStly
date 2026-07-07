@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
-      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev file
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev file rpm rpm-build
 
       - run: cargo build --release
 
@@ -25,6 +25,12 @@ jobs:
           cargo deb
           mkdir -p artifacts
           cp target/debian/*.deb artifacts/
+
+      - name: Build .rpm
+        run: |
+          cargo install cargo-generate-rpm
+          cargo generate-rpm
+          cp target/generate-rpm/*.rpm artifacts/
 
       - name: Build AppImage
         run: |
@@ -103,17 +109,27 @@ jobs:
 
       - run: cargo build --release
 
+      - name: Package .exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts
+          Compress-Archive -Path target/release/russtly.exe,README.md `
+            -DestinationPath "artifacts/russtly-$env:GITHUB_REF_NAME.Substring(1)-x86_64.zip"
+
       - name: Build .msi
         run: |
           cargo install cargo-wix
           cargo wix
         shell: pwsh
+        continue-on-error: true
 
       - name: Collect MSI
         shell: pwsh
+        if: success() || failure()
         run: |
-          New-Item -ItemType Directory -Force -Path artifacts
-          Get-ChildItem -Path target/wix -Filter *.msi | Copy-Item -Destination artifacts/
+          if (Test-Path target/wix/*.msi) {
+            Copy-Item target/wix/*.msi artifacts/
+          }
 
       - uses: actions/upload-artifact@v4
         with:

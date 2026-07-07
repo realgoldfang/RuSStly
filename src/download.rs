@@ -14,10 +14,8 @@ pub async fn download_episode(
     episode_id: i64,
     tx: mpsc::Sender<AppMessage>,
 ) {
-    log::info!("Starting download: episode_id={}, url={}", episode_id, url);
     let result = download_episode_inner(client, url, dest_path, episode_id, &tx).await;
     if let Err(e) = result {
-        log::error!("Download failed for episode_id={}: {}", episode_id, e);
         let _ = tx.send(AppMessage::DownloadFailed {
             episode_id,
             error: e,
@@ -80,7 +78,6 @@ async fn download_episode_inner(
         .await
         .map_err(|e| format!("Failed to flush file: {}", e))?;
 
-    log::info!("Download complete: episode_id={}, path={}", episode_id, dest_path.display());
     let _ = tx.send(AppMessage::DownloadComplete {
         episode_id,
         path: dest_path.to_string_lossy().to_string(),

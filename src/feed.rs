@@ -9,14 +9,12 @@ pub async fn fetch_feed(
     client: &reqwest::Client,
     url: &str,
 ) -> Result<(String, String, String, Vec<NewEpisode>), String> {
-    log::info!("Fetching feed: {}", url);
     let response = client
         .get(url)
         .timeout(Duration::from_secs(30))
         .send()
         .await
         .map_err(|e| {
-            log::error!("HTTP request failed for {}: {}", url, e);
             format!("HTTP request failed: {}", e)
         })?;
 
@@ -24,13 +22,11 @@ pub async fn fetch_feed(
         .bytes()
         .await
         .map_err(|e| {
-            log::error!("Failed to read response body from {}: {}", url, e);
             format!("Failed to read response: {}", e)
         })?;
 
     let channel = Channel::read_from(BufReader::new(&bytes[..]))
         .map_err(|e| {
-            log::error!("Failed to parse RSS XML from {}: {}", url, e);
             format!("Failed to parse RSS: {}", e)
         })?;
 
@@ -92,7 +88,6 @@ pub async fn fetch_feed(
         }
     }
 
-    log::info!("Fetched feed '{}': {} episodes ({} with audio)", title, channel.items().len(), episodes.len());
     Ok((title, description, image_url, episodes))
 }
 

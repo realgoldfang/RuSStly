@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev file
+
+      - run: cargo build --release
+
+      - name: Build .deb
+        run: |
+          cargo install cargo-deb
+          cargo deb
+          mkdir -p artifacts
+          cp target/debian/*.deb artifacts/
+
+      - name: Build AppImage
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+          export APPIMAGE_EXTRACT_AND_RUN=1
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p AppDir/usr/bin
+          cp target/release/russtly AppDir/usr/bin/
+
+          mkdir -p AppDir/usr/share/applications
+          cat > AppDir/usr/share/applications/russtly.desktop << 'DESKTOP'
+[Desktop Entry]
+Name=RuSStly
+Exec=russtly
+Icon=russtly
+Type=Application
+Categories=Audio;Podcast;
+DESKTOP
+
+          # Placeholder icon (required by linuxdeploy)
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          echo 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' | \
+            base64 -d > AppDir/usr/share/icons/hicolor/256x256/apps/russtly.png
+
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          mv RuSStly*-x86_64.AppImage artifacts/russtly-$VERSION-x86_64.AppImage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: artifacts/*
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - run: cargo build --release
+
+      - name: Build .dmg
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          mkdir -p "RuSStly.app/Contents/MacOS"
+          cp target/release/russtly "RuSStly.app/Contents/MacOS/"
+
+          cat > "RuSStly.app/Contents/Info.plist" << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>RuSStly</string>
+  <key>CFBundleDisplayName</key><string>RuSStly</string>
+  <key>CFBundleExecutable</key><string>russtly</string>
+  <key>CFBundleIdentifier</key><string>com.github.russtly</string>
+  <key>CFBundleVersion</key><string>${VERSION}</string>
+  <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>LSMinimumSystemVersion</key><string>10.15</string>
+</dict>
+</plist>
+PLIST
+
+          mkdir artifacts
+          hdiutil create -volname "RuSStly $VERSION" -srcFolder RuSStly.app \
+            -ov -format UDZO "artifacts/russtly-$VERSION-x86_64.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-packages
+          path: artifacts/*
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - run: cargo build --release
+
+      - name: Build .msi
+        run: |
+          cargo install cargo-wix
+          cargo wix
+        shell: pwsh
+
+      - name: Collect MSI
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts
+          Get-ChildItem -Path target/wix -Filter *.msi | Copy-Item -Destination artifacts/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: artifacts/*
+
+  release:
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - run: |
+          mkdir -p release-assets
+          cp -r linux-packages/* macos-packages/* windows-packages/* release-assets/
+          ls -la release-assets/
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true

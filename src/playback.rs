@@ -20,16 +20,13 @@ pub struct Player {
 
 impl Player {
     pub fn new() -> Self {
-        log::info!("Initializing audio output stream");
         let result = OutputStream::try_default();
         let (_stream, stream_handle) = match result {
             Ok(s) => s,
             Err(e) => {
-                log::error!("Failed to open audio output: {}", e);
                 panic!("Failed to open audio output: {}", e);
             }
         };
-        log::info!("Audio output stream opened successfully");
         let sink = Sink::try_new(&stream_handle).expect("Failed to create audio sink");
         Self {
             _stream,
@@ -46,22 +43,18 @@ impl Player {
     fn create_source(&self, path: &str, seek_pos: Option<Duration>) -> Option<Box<dyn Source<Item = f32> + Send>> {
         use rodio::source::Source as _;
 
-        log::debug!("Creating audio source: path={}, seek_pos={:?}", path, seek_pos);
         let file = match File::open(path) {
             Ok(f) => f,
-            Err(e) => {
-                log::error!("Failed to open audio file {}: {}", path, e);
+            Err(_) => {
                 return None;
             }
         };
         let mut decoder = match Decoder::new(BufReader::new(file)) {
             Ok(d) => d,
-            Err(e) => {
-                log::error!("Failed to decode audio file {}: {}", path, e);
+            Err(_) => {
                 return None;
             }
         };
-        log::debug!("Audio file decoded successfully: path={}", path);
         let total = decoder.total_duration();
         *self.total_duration.lock().unwrap() = total;
 

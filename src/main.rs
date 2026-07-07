@@ -24,39 +24,7 @@ fn data_dir() -> PathBuf {
 fn main() -> eframe::Result<()> {
     let data_path = data_dir();
     std::fs::create_dir_all(&data_path).ok();
-    let log_path = data_path.join("russtly.log");
 
-    let log_level = if std::env::var("RUST_LOG").is_ok() {
-        simplelog::LevelFilter::Debug
-    } else {
-        simplelog::LevelFilter::Info
-    };
-
-    let term_config = simplelog::ConfigBuilder::new()
-        .set_time_format_rfc2822()
-        .set_target_level(simplelog::LevelFilter::Error)
-        .build();
-
-    let file_config = simplelog::ConfigBuilder::new()
-        .set_time_format_rfc2822()
-        .build();
-
-    simplelog::CombinedLogger::init(vec![
-        simplelog::TermLogger::new(
-            log_level,
-            term_config,
-            simplelog::TerminalMode::Stderr,
-            simplelog::ColorChoice::Auto,
-        ),
-        simplelog::WriteLogger::new(
-            simplelog::LevelFilter::Debug,
-            file_config,
-            std::fs::File::create(&log_path).expect("Failed to create log file"),
-        ),
-    ])
-    .expect("Failed to initialize logging");
-
-    log::info!("Logging to {}", log_path.display());
 
     let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
     let _guard = rt.enter();

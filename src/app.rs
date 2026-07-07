@@ -173,12 +173,10 @@ pub struct RuSStlyApp {
 
 impl RuSStlyApp {
     pub fn new() -> Self {
-        log::info!("Starting RuSStly");
         let rt_handle = tokio::runtime::Handle::current();
         let data_path = data_dir();
         std::fs::create_dir_all(&data_path).ok();
         let db_path = data_path.join("russtly.db");
-        log::info!("Database path: {}", db_path.display());
         let conn = Connection::open(&db_path).expect("Failed to open database");
         db::init_db(&conn).expect("Failed to initialize database");
 
@@ -288,7 +286,6 @@ impl RuSStlyApp {
         if let Some(feed_id) = self.selected_feed_id {
             self.episodes = db::get_episodes(&self.conn, feed_id).unwrap_or_default();
             self.episodes.truncate(self.max_episodes);
-            log::debug!("Loaded {} episodes for feed_id={}", self.episodes.len(), feed_id);
         } else {
             self.episodes.clear();
         }
@@ -305,10 +302,7 @@ impl RuSStlyApp {
                     image_url,
                     episodes,
                 } => {
-                    log::info!("Feed fetched: id={}, title='{}', {} episodes", feed_id, title, episodes.len());
-                    if let Err(e) = db::update_feed(&self.conn, feed_id, &title, &description, &image_url) {
-                        log::error!("Failed to update feed {}: {}", feed_id, e);
-                    }
+                    let _ = db::update_feed(&self.conn, feed_id, &title, &description, &image_url);
                     let episodes: Vec<_> = episodes.into_iter().take(self.max_episodes).collect();
                     let results = db::upsert_episodes_batch(&mut self.conn, feed_id, &episodes)
                         .unwrap_or_default();
@@ -356,29 +350,23 @@ impl RuSStlyApp {
                     }
                 }
                 AppMessage::FeedFetchFailed { url, error } => {
-                    log::error!("Feed fetch failed: url={}, error={}", url, error);
                     self.add_feed_error = format!("Failed to fetch {}: {}", url, error);
                 }
                 AppMessage::DownloadProgress {
                     episode_id,
                     progress,
                 } => {
-                    log::debug!("Download progress: episode_id={}, {:.1}%", episode_id, progress * 100.0);
                     self.download_progress.insert(episode_id, progress);
                 }
                 AppMessage::DownloadComplete {
                     episode_id,
                     path,
                 } => {
-                    log::info!("Download complete: episode_id={}, path={}", episode_id, path);
                     self.download_progress.remove(&episode_id);
-                    if let Err(e) = db::set_episode_downloaded(&self.conn, episode_id, &path) {
-                        log::error!("Failed to mark episode {} as downloaded: {}", episode_id, e);
-                    }
+                    let _ = db::set_episode_downloaded(&self.conn, episode_id, &path);
                     self.load_episodes();
                 }
                 AppMessage::DownloadFailed { episode_id, error } => {
-                    log::error!("Download failed: episode_id={}, error={}", episode_id, error);
                     self.download_progress.remove(&episode_id);
                     self.add_feed_error = format!("Download failed: {}", error);
                 }
@@ -388,11 +376,6 @@ impl RuSStlyApp {
                     message,
                 } => {
                     self.pending_sync_episodes.remove(&episode_id);
-                    if success {
-                        log::info!("Sync complete: episode_id={}, {}", episode_id, message);
-                    } else {
-                        log::error!("Sync failed: episode_id={}, {}", episode_id, message);
-                    }
                     self.sync_status = if success {
                         format!("Synced: {}", message)
                     } else {
@@ -415,10 +398,7 @@ impl RuSStlyApp {
                     if total_secs > 0.0 {
                         let progress = pos / total_secs;
                         if progress >= self.auto_mark_threshold as f64 {
-                            log::info!("Auto-marking episode {} as played ({:.1}%)", episode_id, progress * 100.0);
-                            if let Err(e) = db::set_episode_played(&self.conn, episode_id) {
-                                log::error!("Failed to auto-mark episode {} as played: {}", episode_id, e);
-                            }
+                            let _ = db::set_episode_played(&self.conn, episode_id);
                             self.load_episodes();
                         }
                     }
@@ -426,20 +406,12 @@ impl RuSStlyApp {
             }
 
             if is_empty {
-                log::info!("Episode {} finished playing", episode_id);
-                if let Err(e) = db::set_episode_played(&self.conn, episode_id) {
-                    log::error!("Failed to mark finished episode {} as played: {}", episode_id, e);
-                }
-                if let Err(e) = db::update_episode_state(&self.conn, episode_id, true, pos) {
-                    log::error!("Failed to save final position for episode {}: {}", episode_id, e);
-                }
+                let _ = db::set_episode_played(&self.conn, episode_id);
+                let _ = db::update_episode_state(&self.conn, episode_id, true, pos);
                 self.player.stop();
                 self.load_episodes();
             } else if self.last_position_save.elapsed() >= std::time::Duration::from_secs(2) {
-                log::debug!("Saving position for episode {}: {:.1}s", episode_id, pos);
-                if let Err(e) = db::update_episode_state(&self.conn, episode_id, false, pos) {
-                    log::error!("Failed to save position for episode {}: {}", episode_id, e);
-                }
+                let _ = db::update_episode_state(&self.conn, episode_id, false, pos);
                 self.last_position_save = std::time::Instant::now();
             }
         }
@@ -532,7 +504,6 @@ impl eframe::App for RuSStlyApp {
                     } else if self.feeds.iter().any(|f| f.url == url) {
                         self.add_feed_error = "Already subscribed".to_string();
                     } else {
-                        log::info!("Adding feed: {}", url);
                         self.add_feed_error = "Fetching...".to_string();
                         let tx = self.tx.clone();
                         let client = self.client.clone();
@@ -585,7 +556,6 @@ impl eframe::App for RuSStlyApp {
                 ui.separator();
 
                 if ui.button("Refresh All").clicked() {
-                    log::info!("Refreshing all feeds ({} total)", self.feeds.len());
                     for feed in self.feeds.clone() {
                         let tx = self.tx.clone();
                         let client = self.client.clone();
@@ -674,10 +644,7 @@ impl eframe::App for RuSStlyApp {
                         }
 
                         if let Some(id) = to_remove {
-                            log::info!("Removing feed id={}", id);
-                            if let Err(e) = db::remove_feed(&self.conn, id) {
-                                log::error!("Failed to remove feed {}: {}", id, e);
-                            }
+                            let _ = db::remove_feed(&self.conn, id);
                             self.feeds = db::get_feeds(&self.conn).unwrap_or_default();
                             if self.selected_feed_id == Some(id) {
                                 self.selected_feed_id = self.feeds.first().map(|f| f.id);
@@ -944,7 +911,6 @@ impl eframe::App for RuSStlyApp {
                                                         sanitize_name(&episode.title)
                                                     ));
 
-                                                    log::info!("Downloading episode {} ('{}') to {:?}", episode.id, episode.title, dest_path);
                                                     let tx = self.tx.clone();
                                                     let client = self.client.clone();
                                                     let url = episode.audio_url.clone();

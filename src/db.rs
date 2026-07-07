@@ -3,7 +3,6 @@ use rusqlite::{params, Connection, Result};
 use crate::types::{Episode, Feed, NewEpisode};
 
 pub fn init_db(conn: &Connection) -> Result<()> {
-    log::debug!("Initializing database schema");
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS feeds (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,13 +36,11 @@ pub fn init_db(conn: &Connection) -> Result<()> {
 }
 
 pub fn add_feed(conn: &Connection, url: &str, title: &str, description: &str, image_url: &str) -> Result<i64> {
-    log::debug!("Adding feed: url={}, title={}", url, title);
     conn.execute(
         "INSERT INTO feeds (url, title, description, image_url) VALUES (?1, ?2, ?3, ?4)",
         params![url, title, description, image_url],
     )?;
     let id = conn.last_insert_rowid();
-    log::info!("Feed added: id={}, url={}, title={}", id, url, title);
     Ok(id)
 }
 
@@ -67,7 +64,6 @@ pub fn get_feeds(conn: &Connection) -> Result<Vec<Feed>> {
 }
 
 pub fn remove_feed(conn: &Connection, id: i64) -> Result<()> {
-    log::info!("Removing feed id={}", id);
     conn.execute("DELETE FROM episodes WHERE feed_id = ?1", params![id])?;
     conn.execute("DELETE FROM feeds WHERE id = ?1", params![id])?;
     Ok(())

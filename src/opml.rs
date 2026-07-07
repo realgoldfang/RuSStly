@@ -1,10 +1,8 @@
 use crate::types::Feed;
 
 pub fn import_opml(path: &str) -> Result<Vec<String>, String> {
-    log::info!("Importing OPML from {}", path);
     let content = std::fs::read_to_string(path)
         .map_err(|e| {
-            log::error!("Failed to read OPML file {}: {}", path, e);
             format!("Failed to read OPML file: {}", e)
         })?;
 
@@ -27,16 +25,13 @@ pub fn import_opml(path: &str) -> Result<Vec<String>, String> {
     }
 
     if urls.is_empty() {
-        log::warn!("No feed URLs found in OPML file: {}", path);
         return Err("No feed URLs found in OPML file".to_string());
     }
 
-    log::info!("Imported {} feed URLs from OPML", urls.len());
     Ok(urls)
 }
 
 pub fn export_opml(path: &str, feeds: &[Feed]) -> Result<(), String> {
-    log::info!("Exporting {} feeds to OPML file: {}", feeds.len(), path);
     let mut xml = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <opml version=\"2.0\">\n\

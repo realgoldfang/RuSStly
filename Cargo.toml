@@ -2,6 +2,17 @@
 name = "russtly"
 version = "0.1.0"
 edition = "2021"
+description = "A native podcast client built with Rust and egui"
+authors = ["cybernatedev"]
+license = "MIT"
+
+[package.metadata.deb]
+maintainer = "cybernatedev"
+depends = "$auto"
+section = "sound"
+
+[package.metadata.wix]
+
 
 [dependencies]
 eframe = "0.27"
@@ -14,5 +25,4 @@ rss = "2"
 rodio = "0.19"
 rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = "0.4"
-log = "0.4"
-simplelog = "0.12"
+

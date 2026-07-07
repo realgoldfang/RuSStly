@@ -54,7 +54,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev file rpm rpm-build
+          sudo apt-get install -y libasound2-dev file
 
       - run: cargo build --release
 
@@ -66,13 +66,6 @@ jobs:
           cargo deb
           mkdir -p artifacts
           cp target/debian/*.deb artifacts/
-
-      - name: Build .rpm
-        if: matrix.name == 'linux'
-        run: |
-          cargo install cargo-generate-rpm
-          cargo generate-rpm
-          cp target/generate-rpm/*.rpm artifacts/
 
       - name: Build AppImage
         if: matrix.name == 'linux'

@@ -11,11 +11,6 @@ maintainer = "cybernatedev"
 depends = "$auto"
 section = "sound"
 
-[package.metadata.generate-rpm]
-assets = [
-    { source = "target/release/russtly", dest = "usr/bin/russtly", mode = "755" },
-]
-
 [package.metadata.wix]
 
 

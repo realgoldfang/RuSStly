@@ -327,6 +327,10 @@ impl RuSStlyApp {
     }
 
     fn init_tray(&mut self) {
+        // tray-icon uses libappindicator (X11 only; Wayland needs StatusNotifier)
+        if std::env::var("XDG_SESSION_TYPE").as_deref() == Ok("wayland") || gtk::init().is_err() {
+            return;
+        }
         let show = MenuItem::with_id(self.tray_show_id.clone(), "Show", true, None::<_>);
         let quit = MenuItem::with_id(self.tray_quit_id.clone(), "Quit", true, None::<_>);
         if let Some(menu) = Menu::with_items(&[&show, &quit]).ok() {

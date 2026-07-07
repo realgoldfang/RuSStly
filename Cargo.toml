@@ -27,4 +27,5 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = "0.4"
 notify-rust = "4"
 tray-icon = "0.18"
+gtk = "0.18"
 

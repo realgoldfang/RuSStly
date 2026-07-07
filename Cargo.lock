@@ -4068,6 +4068,7 @@ dependencies = [
  "chrono",
  "eframe",
  "egui",
+ "gtk",
  "notify-rust",
  "reqwest",
  "rodio",

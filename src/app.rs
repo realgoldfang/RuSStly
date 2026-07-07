@@ -157,6 +157,7 @@ pub struct RuSStlyApp {
     _tray: Option<tray_icon::TrayIcon>,
     tray_show_id: MenuId,
     tray_quit_id: MenuId,
+    tray_initialized: bool,
     should_hide: bool,
     should_quit: bool,
 
@@ -229,7 +230,6 @@ impl RuSStlyApp {
 
         let show_id: MenuId = "show".into();
         let quit_id: MenuId = "quit".into();
-        let tray = create_tray_icon(&show_id, &quit_id);
 
         let mut app = RuSStlyApp {
             conn,
@@ -258,9 +258,10 @@ impl RuSStlyApp {
             expanded_episodes: HashSet::new(),
             last_position_save: std::time::Instant::now(),
             pending_sync_episodes: HashSet::new(),
-            _tray: tray,
+            _tray: None,
             tray_show_id: show_id,
             tray_quit_id: quit_id,
+            tray_initialized: false,
             should_hide: false,
             should_quit: false,
 
@@ -323,6 +324,18 @@ impl RuSStlyApp {
             }
         }
         String::new()
+    }
+
+    fn init_tray(&mut self) {
+        let show = MenuItem::with_id(self.tray_show_id.clone(), "Show", true, None::<_>);
+        let quit = MenuItem::with_id(self.tray_quit_id.clone(), "Quit", true, None::<_>);
+        if let Some(menu) = Menu::with_items(&[&show, &quit]).ok() {
+            self._tray = TrayIconBuilder::new()
+                .with_menu(Box::new(menu))
+                .with_tooltip("RuSStly")
+                .build()
+                .ok();
+        }
     }
 
     fn process_messages(&mut self) {
@@ -477,6 +490,12 @@ impl eframe::App for RuSStlyApp {
                     self.sleep_timer_started_at = None;
                 }
             }
+        }
+
+        // Initialize tray icon on first frame (needs GTK initialized)
+        if !self.tray_initialized {
+            self.init_tray();
+            self.tray_initialized = true;
         }
 
         // Keyboard shortcuts
@@ -1497,18 +1516,6 @@ impl eframe::App for RuSStlyApp {
             self.should_hide = true;
         }
     }
-}
-
-fn create_tray_icon(show_id: &MenuId, quit_id: &MenuId) -> Option<tray_icon::TrayIcon> {
-    let show = MenuItem::with_id(show_id.clone(), "Show", true, None::<_>);
-    let quit = MenuItem::with_id(quit_id.clone(), "Quit", true, None::<_>);
-    let menu = Menu::with_items(&[&show, &quit]).ok()?;
-
-    TrayIconBuilder::new()
-        .with_menu(Box::new(menu))
-        .with_tooltip("RuSStly")
-        .build()
-        .ok()
 }
 
 fn send_notification(summary: &str, body: &str) -> Result<(), Box<dyn std::error::Error>> {

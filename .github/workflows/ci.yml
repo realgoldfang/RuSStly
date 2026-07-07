@@ -32,35 +32,16 @@ jobs:
       - name: Check
         run: cargo check
 
-  package:
+  package-linux:
     needs: [check]
-    name: package-${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            name: linux
-          - os: macos-latest
-            name: macos
-          - os: windows-latest
-            name: windows
-
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev file
-
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev file
       - run: cargo build --release
 
-      # --- Linux packages ---
       - name: Build .deb
-        if: matrix.name == 'linux'
         run: |
           cargo install cargo-deb
           cargo deb
@@ -68,13 +49,11 @@ jobs:
           cp target/debian/*.deb artifacts/
 
       - name: Build AppImage
-        if: matrix.name == 'linux'
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"  # strips "v" prefix if present
+          VERSION="${GITHUB_REF_NAME#v}"
           wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage
           export APPIMAGE_EXTRACT_AND_RUN=1
-
           mkdir -p AppDir/usr/bin
           cp target/release/russtly AppDir/usr/bin/
           mkdir -p AppDir/usr/share/applications
@@ -87,11 +66,22 @@ jobs:
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
           mv RuSStly*-x86_64.AppImage artifacts/russtly-$VERSION-x86_64.AppImage
 
-      # --- macOS package ---
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: artifacts/*
+
+  package-macos:
+    needs: [check]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+
       - name: Build .dmg
-        if: matrix.name == 'macos'
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"  # strips "v" prefix if present
+          VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p "RuSStly.app/Contents/MacOS"
           cp target/release/russtly "RuSStly.app/Contents/MacOS/"
           printf '%s\n' \
@@ -114,9 +104,20 @@ jobs:
           hdiutil create -volname "RuSStly $VERSION" -srcFolder RuSStly.app \
             -ov -format UDZO "artifacts/russtly-$VERSION-x86_64.dmg"
 
-      # --- Windows packages ---
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-packages
+          path: artifacts/*
+
+  package-windows:
+    needs: [check]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+
       - name: Package .exe
-        if: matrix.name == 'windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts
@@ -126,7 +127,6 @@ jobs:
             -DestinationPath "artifacts/russtly-${ver}-x86_64.zip"
 
       - name: Build .msi
-        if: matrix.name == 'windows'
         shell: pwsh
         continue-on-error: true
         run: |
@@ -134,22 +134,20 @@ jobs:
           cargo wix
 
       - name: Collect MSI
-        if: matrix.name == 'windows'
         shell: pwsh
         run: |
           if (Test-Path target/wix/*.msi) {
             Copy-Item target/wix/*.msi artifacts/
           }
 
-      # --- Upload artifacts for release ---
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}-packages
+          name: windows-packages
           path: artifacts/*
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [package]
+    needs: [package-linux, package-macos, package-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write

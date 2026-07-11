@@ -62,12 +62,9 @@ jobs:
           mkdir -p AppDir/usr/bin
           cp target/release/russtly AppDir/usr/bin/
           mkdir -p AppDir/usr/share/applications
-          printf '%s\n' '[Desktop Entry]' 'Name=RuSStly' 'Exec=russtly' \
-            'Icon=russtly' 'Type=Application' 'Categories=AudioVideo;Audio;X-Podcast;' \
-            > AppDir/usr/share/applications/russtly.desktop
+          cp res/russtly.desktop AppDir/usr/share/applications/russtly.desktop
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-          echo 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' | \
-            base64 -d > AppDir/usr/share/icons/hicolor/256x256/apps/russtly.png
+          cp res/icon-256.png AppDir/usr/share/icons/hicolor/256x256/apps/russtly.png
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
           mv RuSStly*-x86_64.AppImage artifacts/russtly-$VERSION-x86_64.AppImage
 

@@ -10,6 +10,12 @@ license = "MIT"
 maintainer = "cybernatedev"
 depends = "$auto"
 section = "sound"
+desktop = "res/russtly.desktop"
+icon = "res/icon-256.png"
+assets = [
+  ["res/icon-256.png", "/usr/share/icons/hicolor/256x256/apps/russtly.png", "644"],
+  ["res/icon.png", "/usr/share/icons/hicolor/64x64/apps/russtly.png", "644"],
+]
 
 [package.metadata.wix]
 

@@ -1,5 +1,5 @@
 # .github/workflows/publish-to-apt.yml
-# Add this to each source repo (mcp-sysd, howler, lupine, nspire-tools).
+# Add this to each source repo (mcp-sysd, howler, lupine, etc.).
 # On release, triggers the apt repo build in realgoldfang.github.io.
 
 name: Publish to APT Repo
@@ -17,15 +17,21 @@ jobs:
         run: |
           REPO="${{ github.repository }}"
           PKG="${REPO##*/}"
-          # normalize nspire-cli/nspire-gui → nspire-tools
+          # normalize repo names to package names
           case "${PKG}" in
-            nspire-cli|nspire-gui) PKG="nspire-tools" ;;
+            Backup-Util)       PKG="backup-util" ;;
+            Luna-rs)           PKG="luna-rs" ;;
+            Luna)              PKG="luna" ;;
+            Podcast2.0|Lupine) PKG="lupine" ;;
+            RuSStly)           PKG="russtly" ;;
+            mcp-sysd)          PKG="mcp-sysd" ;;
+            Howler)            PKG="howler" ;;
           esac
           echo "name=${PKG}" >> "$GITHUB_OUTPUT"
 
       - name: Trigger apt repo build
         env:
-          GH_TOKEN: ${{ secrets.APT_PAT }}
+          GH_TOKEN: ${{ secrets.APT_REPO_TOKEN }}
         run: |
           gh api repos/realgoldfang/realgoldfang.github.io/dispatches \
             --method POST \
